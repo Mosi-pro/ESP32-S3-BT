@@ -45,6 +45,7 @@
 
 #include "USB.h"
 #include "esp_bt.h"
+#include "tusb.h"  // tud_*()-Funktionen, Typen (explizit noetig, USB.h bindet es nicht ein)
 #include "device/usbd_pvt.h"
 
 // ======================= Konfiguration =======================
@@ -386,16 +387,20 @@ static_assert(sizeof(kConfigDesc) == 177, "wTotalLength der Konfiguration stimmt
 
 static char g_serialStr[17];
 
-extern "C" uint8_t const *tud_descriptor_device_cb(void) {
+// Die Callbacks stehen in einem extern-"C"-Block (einzelne extern-"C"-Definitionen bringen den Prototyp-Generator
+// der Arduino IDE durcheinander). Ihre Deklarationen stammen aus tusb.h, sie ersetzen die weak-Versionen des Cores.
+extern "C" {
+
+const uint8_t *tud_descriptor_device_cb(void) {
   return kDeviceDesc;
 }
 
-extern "C" uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
+const uint8_t *tud_descriptor_configuration_cb(uint8_t index) {
   (void)index;
   return kConfigDesc;
 }
 
-extern "C" uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
+const uint16_t *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
   (void)langid;
   static uint16_t desc[40];
   const char *s = nullptr;
@@ -415,6 +420,8 @@ extern "C" uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t lang
   desc[0] = (uint16_t)((0x03 << 8) | (2 * count + 2));
   return desc;
 }
+
+}  // extern "C"
 
 // ======================= USB-Klassentreiber "Bluetooth HCI" =======================
 // Eigener TinyUSB-Treiber (der Arduino-Core hat keinen Bluetooth-Klassentreiber).
@@ -549,7 +556,9 @@ static bool btdControl(uint8_t rhport, uint8_t stage, tusb_control_request_t con
 
 static usbd_class_driver_t g_btDriver;
 
-extern "C" usbd_class_driver_t const *usbd_app_driver_get_cb(uint8_t *driver_count) {
+extern "C" {
+
+const usbd_class_driver_t *usbd_app_driver_get_cb(uint8_t *driver_count) {
   memset(&g_btDriver, 0, sizeof(g_btDriver));
   g_btDriver.init = btdInit;
   g_btDriver.reset = btdReset;
@@ -559,6 +568,8 @@ extern "C" usbd_class_driver_t const *usbd_app_driver_get_cb(uint8_t *driver_cou
   *driver_count = 1;
   return &g_btDriver;
 }
+
+}  // extern "C"
 
 // ======================= Verhindert Freigabe des BLE-Speichers =======================
 // Der Arduino-Core gibt beim Start den Bluetooth-Speicher frei, wenn kein BLE-Sketch erkannt wird.
